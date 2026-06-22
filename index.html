@@ -41,6 +41,7 @@
             border: 1px solid var(--border-color);
             flex-wrap: wrap;
             gap: 10px;
+            position: relative;
         }
 
         h1 {
@@ -92,6 +93,74 @@
             display: none;
         }
 
+        /* --- NEW GITHUB CONFIG CONFIGURATION PANEL --- */
+        .github-panel {
+            background-color: #222;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 15px;
+            align-items: end;
+        }
+
+        .github-panel.is-visible {
+            display: grid;
+        }
+
+        .github-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .github-field label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #aaa;
+        }
+
+        .github-field input {
+            background-color: #111;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: white;
+            font-size: 11px;
+            outline: none;
+        }
+
+        .github-field input:focus {
+            border-color: var(--accent-color);
+        }
+
+        /* --- NOTIFICATION POPUP APP ALERTS --- */
+        #app-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #333;
+            border-left: 4px solid var(--accent-color);
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #app-toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
         .mobile-tabs {
             display: none;
             grid-template-columns: repeat(3, 1fr);
@@ -123,7 +192,7 @@
             display: flex;
             gap: 40px;
             flex: 1;
-            height: calc(100% - 80px);
+            height: calc(100% - 130px);
             margin-top: 10px;
             overflow: hidden;
         }
@@ -426,7 +495,7 @@
             header { padding: 10px; justify-content: center; text-align: center; }
             .controls-global { justify-content: center; width: 100%; }
             .mobile-tabs { display: grid; }
-            .app-container { gap: 0; }
+            .app-container { gap: 0; height: calc(100% - 180px); }
             .column { display: none; width: 100%; min-width: 0; }
             .column.mobile-active { display: flex; }
         }
@@ -440,11 +509,12 @@
         </div>
         <div class="controls-global">
             <button class="btn-global is-locked" id="btn-lock-toggle" onclick="toggleWorkspaceLock()">🔒 Locked</button>
-            <button class="btn-global" onclick="saveWorkspace()">💾 Save</button>
-            <button class="btn-global" onclick="document.getElementById('file-input').click()">📁 Import</button>
+            <button class="btn-global" onclick="saveWorkspace()">💾 Save Local</button>
+            <button class="btn-global" onclick="document.getElementById('file-input').click()">📁 Import Local</button>
             
-            <button class="btn-global" style="background-color: #24292e; border-color: #444;" onclick="saveWorkspaceToGitHub()">🐙 GitHub Save</button>
-            <button class="btn-global" style="background-color: #24292e; border-color: #444;" onclick="importWorkspaceFromGitHub()">🐙 GitHub Import</button>
+            <button class="btn-global" style="background-color: #24292e; border-color: #444;" onclick="toggleGitHubPanel()">🐙 GitHub Config</button>
+            <button class="btn-global" style="background-color: #008c95;" onclick="saveWorkspaceToGitHub()">📤 Repo Push</button>
+            <button class="btn-global" style="background-color: #9c27b0;" onclick="importWorkspaceFromGitHub()">📥 Repo Pull</button>
 
             <select id="workspace-dropdown" class="select-global" onchange="handleDropdownSelect(event)">
                 <option value="" disabled selected>Select Workspace...</option>
@@ -454,6 +524,25 @@
             <input type="file" id="file-input" accept=".json" onchange="importWorkspaceFile(event)">
         </div>
     </header>
+
+    <div id="github-drawer" class="github-panel">
+        <div class="github-field">
+            <label>GitHub Token (PAT)</label>
+            <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxx" oninput="updateGHConfig()">
+        </div>
+        <div class="github-field">
+            <label>Account Username</label>
+            <input type="text" id="gh-owner" placeholder="e.g. stage-engineer" oninput="updateGHConfig()">
+        </div>
+        <div class="github-field">
+            <label>Repository Name</label>
+            <input type="text" id="gh-repo" placeholder="e.g. audio-patch-vault" oninput="updateGHConfig()">
+        </div>
+        <div class="github-field">
+            <label>File Target Path</label>
+            <input type="text" id="gh-path" placeholder="audio_workspace.json" oninput="updateGHConfig()">
+        </div>
+    </div>
 
     <div class="mobile-tabs">
         <button class="tab-btn active" id="tab-Mixer" onclick="switchMobileTab('Mixer')">Mixer</button>
@@ -502,6 +591,8 @@
         </div>
     </div>
 
+    <div id="app-toast">Notification Message</div>
+
     <script>
         const canvas = document.getElementById('connection-canvas');
         const ctx = canvas.getContext('2d');
@@ -513,28 +604,53 @@
         let importedWorkspaces = {}; 
         let defaultStateBackup = null;
 
-        // --- GITHUB INTEGRATION CONFIGURATION ---
-        // (Replace strings below if you want hardcoded repo tracking presets)
-        const githubConfig = {
-            token: '', 
-            owner: '',
-            repo: '',
-            path: 'workspaces/audio_patch_monitor_workspace.json',
+        // --- ENHANCED GITHUB CORE STORAGE ---
+        let githubConfig = {
+            token: localStorage.getItem('gh_token') || '', 
+            owner: localStorage.getItem('gh_owner') || '',
+            repo: localStorage.getItem('gh_repo') || '',
+            path: localStorage.getItem('gh_path') || 'workspaces/audio_patch_monitor_workspace.json',
             branch: 'main'
         };
 
-        // Fallback runtime credential system if properties are undefined
-        function ensureGitHubCredentials() {
-            if (!githubConfig.token) githubConfig.token = prompt("Enter GitHub Personal Access Token (PAT):");
-            if (!githubConfig.owner) githubConfig.owner = prompt("Enter GitHub Account Username:");
-            if (!githubConfig.repo) githubConfig.repo = prompt("Enter Target Repository Name:");
+        // Populate config fields on launch setup
+        function initGHPanelValues() {
+            document.getElementById('gh-token').value = githubConfig.token;
+            document.getElementById('gh-owner').value = githubConfig.owner;
+            document.getElementById('gh-repo').value = githubConfig.repo;
+            document.getElementById('gh-path').value = githubConfig.path;
+        }
+
+        function toggleGitHubPanel() {
+            const drawer = document.getElementById('github-drawer');
+            drawer.classList.toggle('is-visible');
+            setTimeout(resizeCanvas, 150);
+        }
+
+        function updateGHConfig() {
+            githubConfig.token = document.getElementById('gh-token').value.trim();
+            githubConfig.owner = document.getElementById('gh-owner').value.trim();
+            githubConfig.repo = document.getElementById('gh-repo').value.trim();
+            githubConfig.path = document.getElementById('gh-path').value.trim() || 'workspaces/audio_patch_monitor_workspace.json';
             
-            return githubConfig.token && githubConfig.owner && githubConfig.repo;
+            localStorage.setItem('gh_token', githubConfig.token);
+            localStorage.setItem('gh_owner', githubConfig.owner);
+            localStorage.setItem('gh_repo', githubConfig.repo);
+            localStorage.setItem('gh_path', githubConfig.path);
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('app-toast');
+            toast.textContent = msg;
+            toast.style.borderLeftColor = isError ? '#ff5252' : '#00adb5';
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3500);
         }
 
         async function saveWorkspaceToGitHub() {
-            if (!ensureGitHubCredentials()) {
-                alert("GitHub operations aborted: Missing target repo configurations.");
+            if (!githubConfig.token || !githubConfig.owner || !githubConfig.repo) {
+                document.getElementById('github-drawer').classList.add('is-visible');
+                showToast("Please fill out your GitHub configurations first!", true);
                 return;
             }
 
@@ -571,20 +687,21 @@
                 });
 
                 if (saveResponse.ok) {
-                    alert("🔒 Workspace configuration successfully backed up to GitHub!");
+                    showToast("🔒 Config uploaded successfully to GitHub Repo!");
                 } else {
                     const errData = await saveResponse.json();
-                    throw new Error(errData.message || "Failed to commit changes.");
+                    throw new Error(errData.message || "Failed request validation.");
                 }
             } catch (error) {
-                console.error("GitHub Save Error:", error);
-                alert(`Failed to save to GitHub: ${error.message}`);
+                console.error(error);
+                showToast(`Push failed: Check credentials/permissions (404/Not Found)`, true);
             }
         }
 
         async function importWorkspaceFromGitHub() {
-            if (!ensureGitHubCredentials()) {
-                alert("GitHub operations aborted: Missing target repo configurations.");
+            if (!githubConfig.token || !githubConfig.owner || !githubConfig.repo) {
+                document.getElementById('github-drawer').classList.add('is-visible');
+                showToast("Please fill out your GitHub configurations first!", true);
                 return;
             }
 
@@ -595,27 +712,21 @@
                     headers: { 'Authorization': `token ${githubConfig.token}` }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Could not locate configuration storage target context at path: ${githubConfig.path}`);
-                }
+                if (!response.ok) throw new Error("File location endpoint not found.");
 
                 const fileData = await response.json();
                 const decodedContent = decodeURIComponent(escape(atob(fileData.content)));
                 const parsedState = JSON.parse(decodedContent);
 
-                if (!parsedState.boxes || !parsedState.connections) {
-                    throw new Error("Invalid workspace configuration inside target JSON profile mapping.");
-                }
-
                 renderStateStructure(parsedState);
-                alert(`📂 Loaded patch config layout completely from repository!`);
+                showToast("📥 Clean layout data downloaded from GitHub repository!");
             } catch (error) {
-                console.error("GitHub Import Error:", error);
-                alert(`Failed to import from GitHub: ${error.message}`);
+                console.error(error);
+                showToast("Pull failed: Could not trace target workspace path.", true);
             }
         }
 
-        // --- CORE APPLICATION LOGIC ENGINES ---
+        // --- CORE AUDIO APP ROUTING ENGINE FUNCTIONS ---
         function resizeCanvas() {
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
@@ -966,7 +1077,7 @@
                     renderStateStructure(parsedData);
 
                 } catch (err) {
-                    alert("Invalid setup configuration file structure.");
+                    showToast("Invalid configuration file schema.", true);
                 }
             };
             reader.readAsText(file);
@@ -984,25 +1095,14 @@
             }
         }
 
-        // --- GLOBAL KEYBOARD SHORTCUTS LISTENER ---
         window.addEventListener('keydown', function(event) {
             if (!event.ctrlKey && !event.metaKey) return; 
-
             const key = event.key.toLowerCase();
-            
-            if (key === 'm') {
-                event.preventDefault();
-                createBoxAction('Mixer');
-            } else if (key === 'l') {
-                event.preventDefault();
-                createBoxAction('Line');
-            } else if (key === 's') {
-                event.preventDefault(); 
-                createBoxAction('Snake');
-            }
+            if (key === 'm') { event.preventDefault(); createBoxAction('Mixer'); } 
+            else if (key === 'l') { event.preventDefault(); createBoxAction('Line'); } 
+            else if (key === 's') { event.preventDefault(); createBoxAction('Snake'); }
         });
 
-        // --- INITIALIZATION ENGINE ---
         function initAppEngine() {
             if (document.querySelectorAll('.audio-box').length > 0) return;
 
@@ -1013,15 +1113,11 @@
                 "EGtr1", "EGtr2", "Lkeys", "SKeys"
             ];
             
-            mixerChannels.forEach(name => {
-                createBox('Mixer', name, '#e91e63', null, false);
-            });
-
-            for (let i = 1; i <= 32; i++) {
-                createBox('Line', `Line ${i}`, '#00adb5', null, false);
-            }
-
+            mixerChannels.forEach(name => createBox('Mixer', name, '#e91e63', null, false));
+            for (let i = 1; i <= 32; i++) { createBox('Line', `Line ${i}`, '#00adb5', null, false); }
             createBox('Snake', 'Stage Box A', '#9c27b0', null, false);
+
+            initGHPanelValues();
 
             setTimeout(() => {
                 defaultStateBackup = captureCurrentStateStructure();
