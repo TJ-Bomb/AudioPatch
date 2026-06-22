@@ -443,6 +443,9 @@
             <button class="btn-global" onclick="saveWorkspace()">💾 Save</button>
             <button class="btn-global" onclick="document.getElementById('file-input').click()">📁 Import</button>
             
+            <button class="btn-global" style="background-color: #24292e; border-color: #444;" onclick="saveWorkspaceToGitHub()">🐙 GitHub Save</button>
+            <button class="btn-global" style="background-color: #24292e; border-color: #444;" onclick="importWorkspaceFromGitHub()">🐙 GitHub Import</button>
+
             <select id="workspace-dropdown" class="select-global" onchange="handleDropdownSelect(event)">
                 <option value="" disabled selected>Select Workspace...</option>
                 <option value="default">— Default Setup —</option>
@@ -510,6 +513,109 @@
         let importedWorkspaces = {}; 
         let defaultStateBackup = null;
 
+        // --- GITHUB INTEGRATION CONFIGURATION ---
+        // (Replace strings below if you want hardcoded repo tracking presets)
+        const githubConfig = {
+            token: '', 
+            owner: '',
+            repo: '',
+            path: 'workspaces/audio_patch_monitor_workspace.json',
+            branch: 'main'
+        };
+
+        // Fallback runtime credential system if properties are undefined
+        function ensureGitHubCredentials() {
+            if (!githubConfig.token) githubConfig.token = prompt("Enter GitHub Personal Access Token (PAT):");
+            if (!githubConfig.owner) githubConfig.owner = prompt("Enter GitHub Account Username:");
+            if (!githubConfig.repo) githubConfig.repo = prompt("Enter Target Repository Name:");
+            
+            return githubConfig.token && githubConfig.owner && githubConfig.repo;
+        }
+
+        async function saveWorkspaceToGitHub() {
+            if (!ensureGitHubCredentials()) {
+                alert("GitHub operations aborted: Missing target repo configurations.");
+                return;
+            }
+
+            const workspaceData = captureCurrentStateStructure();
+            const contentString = JSON.stringify(workspaceData, null, 2);
+            const base64Content = btoa(unescape(encodeURIComponent(contentString)));
+            const url = `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${githubConfig.path}`;
+            
+            try {
+                let sha = null;
+                const checkResponse = await fetch(url, {
+                    headers: { 'Authorization': `token ${githubConfig.token}` }
+                });
+                
+                if (checkResponse.ok) {
+                    const fileData = await checkResponse.json();
+                    sha = fileData.sha;
+                }
+
+                const commitBody = {
+                    message: "⚡ Auto-update: Saved Audio Patch Workspace via App Monitor",
+                    content: base64Content,
+                    branch: githubConfig.branch
+                };
+                if (sha) commitBody.sha = sha;
+
+                const saveResponse = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${githubConfig.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(commitBody)
+                });
+
+                if (saveResponse.ok) {
+                    alert("🔒 Workspace configuration successfully backed up to GitHub!");
+                } else {
+                    const errData = await saveResponse.json();
+                    throw new Error(errData.message || "Failed to commit changes.");
+                }
+            } catch (error) {
+                console.error("GitHub Save Error:", error);
+                alert(`Failed to save to GitHub: ${error.message}`);
+            }
+        }
+
+        async function importWorkspaceFromGitHub() {
+            if (!ensureGitHubCredentials()) {
+                alert("GitHub operations aborted: Missing target repo configurations.");
+                return;
+            }
+
+            const url = `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repo}/contents/${githubConfig.path}?ref=${githubConfig.branch}`;
+            
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `token ${githubConfig.token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Could not locate configuration storage target context at path: ${githubConfig.path}`);
+                }
+
+                const fileData = await response.json();
+                const decodedContent = decodeURIComponent(escape(atob(fileData.content)));
+                const parsedState = JSON.parse(decodedContent);
+
+                if (!parsedState.boxes || !parsedState.connections) {
+                    throw new Error("Invalid workspace configuration inside target JSON profile mapping.");
+                }
+
+                renderStateStructure(parsedState);
+                alert(`📂 Loaded patch config layout completely from repository!`);
+            } catch (error) {
+                console.error("GitHub Import Error:", error);
+                alert(`Failed to import from GitHub: ${error.message}`);
+            }
+        }
+
+        // --- CORE APPLICATION LOGIC ENGINES ---
         function resizeCanvas() {
             canvas.width = canvas.parentElement.clientWidth;
             canvas.height = canvas.parentElement.clientHeight;
@@ -630,7 +736,6 @@
             const mixerBoxes = document.querySelectorAll('.column[data-column="Mixer"] .audio-box');
             const clearBtn = document.getElementById('search-clear-btn');
             
-            // Toggle clear button visibility
             if (cleanQuery.length > 0) {
                 clearBtn.style.display = 'block';
             } else {
@@ -897,7 +1002,7 @@
             }
         });
 
-        // --- BULLETPROOF INITIALIZATION ENGINE ---
+        // --- INITIALIZATION ENGINE ---
         function initAppEngine() {
             if (document.querySelectorAll('.audio-box').length > 0) return;
 
