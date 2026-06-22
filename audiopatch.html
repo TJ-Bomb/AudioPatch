@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Audio Patch Monitor</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-color: #2d2d2d;
+            --text-color: #ffffff;
+            --border-color: #444444;
+            --accent-color: #00adb5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #252525;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        h1 {
+            font-size: 16.8px;
+            color: var(--accent-color);
+        }
+
+        .controls-global {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-global, .select-global {
+            background-color: #444;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9.8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-global:hover, .select-global:hover {
+            background-color: #555;
+            border-color: var(--accent-color);
+        }
+
+        #btn-lock-toggle {
+            background-color: #2e7d32;
+            border-color: #388e3c;
+        }
+        
+        #btn-lock-toggle.is-locked {
+            background-color: #c62828;
+            border-color: #d32f2f;
+        }
+
+        .select-global {
+            outline: none;
+            background-image: none;
+            padding-right: 20px;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .mobile-tabs {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            background-color: #333;
+            color: #aaa;
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+        }
+
+        .app-container {
+            position: relative;
+            display: flex;
+            gap: 40px;
+            flex: 1;
+            height: calc(100% - 80px);
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        #connection-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .column {
+            flex: 1;
+            background-color: var(--panel-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            z-index: 2;
+            min-width: 250px;
+        }
+
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .column-header h2 {
+            font-size: 12.6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .search-container {
+            width: 100%;
+            margin-bottom: 5px;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input {
+            width: 100%;
+            background-color: #1a1a1a;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 6px 30px 6px 10px;
+            color: white;
+            font-size: 11px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .btn-search-clear {
+            position: absolute;
+            right: 8px;
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+            line-height: 1;
+            padding: 2px;
+        }
+
+        .btn-search-clear:hover {
+            color: #ff5252;
+        }
+
+        .btn-add, .btn-sort {
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9.8px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        .btn-add {
+            background-color: var(--accent-color);
+        }
+
+        .btn-add:hover {
+            background-color: #008c95;
+        }
+
+        .btn-sort {
+            background-color: #555;
+            border: 1px solid #666;
+        }
+
+        .btn-sort:hover {
+            background-color: #666;
+            border-color: var(--accent-color);
+        }
+
+        body.workspace-locked .btn-add {
+            background-color: #444 !important;
+            color: #777 !important;
+            pointer-events: none;
+            cursor: not-allowed;
+        }
+
+        .box-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            padding-right: 5px;
+            min-height: 100px;
+        }
+
+        .audio-box {
+            background-color: #3e3e3e;
+            border-left: 6px solid #888;
+            border-radius: 4px;
+            padding: 10px;
+            cursor: default;
+            position: relative;
+            user-select: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: box-shadow 0.3s ease, background-color 0.3s ease;
+        }
+
+        .audio-box.is-hidden {
+            display: none !important;
+        }
+
+        .audio-box.newly-added {
+            animation: pulse-highlight 2s ease-out;
+        }
+
+        @keyframes pulse-highlight {
+            0% {
+                box-shadow: 0 0 15px var(--accent-color);
+                background-color: #4a4a4a;
+            }
+            100% {
+                box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                background-color: #3e3e3e;
+            }
+        }
+
+        .box-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .box-name {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 9.8px;
+            font-weight: bold;
+            width: 100%;
+            border-bottom: 1px transparent;
+            padding: 2px;
+        }
+
+        .box-name:focus {
+            background: #222;
+            outline: none;
+            border-bottom: 1px solid var(--accent-color);
+        }
+
+        body.workspace-locked .box-name {
+            pointer-events: none;
+            user-select: none;
+        }
+
+        body.workspace-locked .color-picker {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        body.workspace-locked .btn-delete {
+            display: none !important;
+        }
+
+        .box-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-picker {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background: transparent;
+            border: none;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .color-picker::-webkit-color-swatch {
+            border-radius: 50%;
+            border: 1px solid #fff;
+        }
+
+        .btn-delete {
+            background: transparent;
+            border: none;
+            color: #ff5252;
+            cursor: pointer;
+            font-size: 9.8px;
+        }
+
+        .node-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+        }
+
+        .node {
+            width: 12px;
+            height: 12px;
+            background-color: #aaa;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .node:hover {
+            transform: scale(1.3);
+            background-color: var(--accent-color);
+        }
+
+        .node.selected {
+            background-color: #ffeb3b;
+            box-shadow: 0 0 8px #ffeb3b;
+        }
+
+        .box-connections-footer {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8.5px;
+            color: #b0b0b0;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 4px 6px;
+            border-radius: 3px;
+            margin-top: 2px;
+            min-height: 20px;
+            align-items: center;
+        }
+
+        .signal-in {
+            color: #00adb5;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 48%;
+        }
+
+        .signal-out {
+            color: #ffeb3b;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 48%;
+            text-align: right;
+            margin-left: auto;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            header { padding: 10px; justify-content: center; text-align: center; }
+            .controls-global { justify-content: center; width: 100%; }
+            .mobile-tabs { display: grid; }
+            .app-container { gap: 0; }
+            .column { display: none; width: 100%; min-width: 0; }
+            .column.mobile-active { display: flex; }
+        }
+    </style>
+</head>
+<body class="workspace-locked">
+
+    <header>
+        <div>
+            <h1>Audio Patch Monitor</h1>
+        </div>
+        <div class="controls-global">
+            <button class="btn-global is-locked" id="btn-lock-toggle" onclick="toggleWorkspaceLock()">🔒 Locked</button>
+            <button class="btn-global" onclick="saveWorkspace()">💾 Save</button>
+            <button class="btn-global" onclick="document.getElementById('file-input').click()">📁 Import</button>
+            
+            <select id="workspace-dropdown" class="select-global" onchange="handleDropdownSelect(event)">
+                <option value="" disabled selected>Select Workspace...</option>
+                <option value="default">— Default Setup —</option>
+            </select>
+
+            <input type="file" id="file-input" accept=".json" onchange="importWorkspaceFile(event)">
+        </div>
+    </header>
+
+    <div class="mobile-tabs">
+        <button class="tab-btn active" id="tab-Mixer" onclick="switchMobileTab('Mixer')">Mixer</button>
+        <button class="tab-btn" id="tab-Line" onclick="switchMobileTab('Line')">Line</button>
+        <button class="tab-btn" id="tab-Snake" onclick="switchMobileTab('Snake')">Snake</button>
+    </div>
+
+    <div class="app-container">
+        <canvas id="connection-canvas"></canvas>
+
+        <div class="column mobile-active" data-column="Mixer">
+            <div class="column-header">
+                <h2>Mixer <small style="font-size:8px; opacity:0.6; display:inline;">(Ctrl+M)</small></h2>
+                <div class="header-actions">
+                    <button class="btn-sort" onclick="sortColumnBoxes('Mixer')">Sort A-Z</button>
+                    <button class="btn-add" onclick="createBoxAction('Mixer')">+ Add</button>
+                </div>
+                <div class="search-container">
+                    <input type="text" id="mixer-search" class="search-input" placeholder="🔍 Search mixer channels..." oninput="filterMixerColumn(this.value)">
+                    <button id="search-clear-btn" class="btn-search-clear" onclick="clearMixerSearch()" title="Clear Search">×</button>
+                </div>
+            </div>
+            <div class="box-list"></div>
+        </div>
+
+        <div class="column" data-column="Line">
+            <div class="column-header">
+                <h2>Line <small style="font-size:8px; opacity:0.6; display:block;">(Ctrl+L)</small></h2>
+                <div class="header-actions">
+                    <button class="btn-sort" onclick="sortColumnBoxes('Line')">Sort A-Z</button>
+                    <button class="btn-add" onclick="createBoxAction('Line')">+ Add</button>
+                </div>
+            </div>
+            <div class="box-list"></div>
+        </div>
+
+        <div class="column" data-column="Snake">
+            <div class="column-header">
+                <h2>Snake <small style="font-size:8px; opacity:0.6; display:block;">(Ctrl+S)</small></h2>
+                <div class="header-actions">
+                    <button class="btn-sort" onclick="sortColumnBoxes('Snake')">Sort A-Z</button>
+                    <button class="btn-add" onclick="createBoxAction('Snake')">+ Add</button>
+                </div>
+            </div>
+            <div class="box-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('connection-canvas');
+        const ctx = canvas.getContext('2d');
+        let boxCounter = 0;
+        let connections = []; 
+        let selectedNode = null;
+        let isLocked = true; 
+
+        let importedWorkspaces = {}; 
+        let defaultStateBackup = null;
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            drawConnections();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100); 
+
+        function switchMobileTab(targetColumnName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`tab-${targetColumnName}`).classList.add('active');
+            document.querySelectorAll('.column').forEach(col => {
+                col.classList.toggle('mobile-active', col.getAttribute('data-column') === targetColumnName);
+            });
+            setTimeout(resizeCanvas, 50);
+        }
+
+        function toggleWorkspaceLock() {
+            isLocked = !isLocked;
+            const lockBtn = document.getElementById('btn-lock-toggle');
+            
+            if (isLocked) {
+                document.body.classList.add('workspace-locked');
+                lockBtn.textContent = "🔒 Locked";
+                lockBtn.classList.add('is-locked');
+                if (selectedNode) {
+                    selectedNode.classList.remove('selected');
+                    selectedNode = null;
+                }
+            } else {
+                document.body.classList.remove('workspace-locked');
+                lockBtn.textContent = "🔓 Unlocked";
+                lockBtn.classList.remove('is-locked');
+            }
+        }
+
+        function createBox(columnName, name = null, color = '#888888', existingId = null, shouldFocus = false) {
+            boxCounter++;
+            const listContainer = document.querySelector(`.column[data-column="${columnName}"] .box-list`);
+            if(!listContainer) return;
+            
+            const boxId = existingId || `box-${boxCounter}`;
+            if(existingId) {
+                const numericId = parseInt(existingId.replace('box-', ''));
+                if(numericId > boxCounter) boxCounter = numericId;
+            }
+
+            const box = document.createElement('div');
+            box.className = 'audio-box';
+            box.id = boxId;
+            box.draggable = false;
+            box.style.borderLeftColor = color;
+
+            box.innerHTML = `
+                <div class="box-header">
+                    <input type="text" class="box-name" value="${name || columnName + ' Ch ' + boxCounter}">
+                    <div class="box-controls">
+                        <input type="color" class="color-picker" value="${color}">
+                        <button class="btn-delete" title="Delete Box">×</button>
+                    </div>
+                </div>
+                <div class="node-container">
+                    <div class="node node-input" id="in-${boxId}" title="Input Connection"></div>
+                    <div class="node node-output" id="out-${boxId}" title="Output Connection"></div>
+                </div>
+                <div class="box-connections-footer">
+                    <span class="signal-in" id="lbl-in-${boxId}"></span>
+                    <span class="signal-out" id="lbl-out-${boxId}"></span>
+                </div>
+            `;
+
+            const nameInput = box.querySelector('.box-name');
+            nameInput.addEventListener('input', () => { 
+                updateSignalTextLabels();
+                drawConnections(); 
+            });
+
+            const picker = box.querySelector('.color-picker');
+            picker.addEventListener('input', (e) => {
+                box.style.borderLeftColor = e.target.value;
+                drawConnections(); 
+            });
+
+            box.querySelector('.btn-delete').addEventListener('click', () => {
+                connections = connections.filter(conn => !conn.from.includes(boxId) && !conn.to.includes(boxId));
+                box.remove();
+                updateSignalTextLabels();
+                drawConnections();
+            });
+
+            box.querySelector('.node-input').addEventListener('click', (e) => handleNodeClick(e, 'input'));
+            box.querySelector('.node-output').addEventListener('click', (e) => handleNodeClick(e, 'output'));
+
+            listContainer.appendChild(box);
+            updateSignalTextLabels();
+            drawConnections();
+
+            if (shouldFocus) {
+                box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                box.classList.add('newly-added');
+                setTimeout(() => {
+                    nameInput.focus();
+                    nameInput.select();
+                }, 100);
+            }
+        }
+
+        function createBoxAction(columnName) {
+            if (isLocked) return;
+            createBox(columnName, null, '#888888', null, true);
+            if (columnName === 'Mixer') {
+                filterMixerColumn(document.getElementById('mixer-search').value);
+            }
+        }
+
+        function filterMixerColumn(query) {
+            const cleanQuery = query.toLowerCase().trim();
+            const mixerBoxes = document.querySelectorAll('.column[data-column="Mixer"] .audio-box');
+            const clearBtn = document.getElementById('search-clear-btn');
+            
+            // Toggle clear button visibility
+            if (cleanQuery.length > 0) {
+                clearBtn.style.display = 'block';
+            } else {
+                clearBtn.style.display = 'none';
+            }
+
+            mixerBoxes.forEach(box => {
+                const channelName = box.querySelector('.box-name').value.toLowerCase();
+                if (channelName.includes(cleanQuery)) {
+                    box.classList.remove('is-hidden');
+                } else {
+                    box.classList.add('is-hidden');
+                }
+            });
+
+            drawConnections();
+        }
+
+        function clearMixerSearch() {
+            const searchInput = document.getElementById('mixer-search');
+            searchInput.value = '';
+            filterMixerColumn('');
+            searchInput.focus();
+        }
+
+        function updateSignalTextLabels() {
+            document.querySelectorAll('.signal-in, .signal-out').forEach(el => el.textContent = '');
+
+            const outputGroupLabels = {};
+
+            connections.forEach(conn => {
+                const srcBoxId = conn.from.replace('out-', '');
+                const destBoxId = conn.to.replace('in-', '');
+
+                const srcBoxEl = document.getElementById(srcBoxId);
+                const destBoxEl = document.getElementById(destBoxId);
+
+                if (!srcBoxEl || !destBoxEl) return;
+
+                const srcName = srcBoxEl.querySelector('.box-name').value;
+                const destName = destBoxEl.querySelector('.box-name').value;
+
+                const inputLabelSpan = document.getElementById(`lbl-in-${destBoxId}`);
+                if (inputLabelSpan) inputLabelSpan.textContent = `In: ${srcName}`;
+
+                if (!outputGroupLabels[srcBoxId]) {
+                    outputGroupLabels[srcBoxId] = [];
+                }
+                outputGroupLabels[srcBoxId].push(destName);
+            });
+
+            Object.keys(outputGroupLabels).forEach(srcBoxId => {
+                const outputLabelSpan = document.getElementById(`lbl-out-${srcBoxId}`);
+                if (outputLabelSpan) {
+                    outputLabelSpan.textContent = `Out: ${outputGroupLabels[srcBoxId].join(', ')}`;
+                }
+            });
+        }
+
+        function sortColumnBoxes(columnName) {
+            const listContainer = document.querySelector(`.column[data-column="${columnName}"] .box-list`);
+            const boxes = Array.from(listContainer.children);
+
+            boxes.sort((a, b) => {
+                const valA = a.querySelector('.box-name').value;
+                const valB = b.querySelector('.box-name').value;
+                return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            boxes.forEach(box => listContainer.appendChild(box));
+            setTimeout(drawConnections, 40);
+        }
+
+        document.querySelectorAll('.box-list').forEach(bl => {
+            bl.addEventListener('scroll', () => { requestAnimationFrame(drawConnections); });
+        });
+
+        function handleNodeClick(e, type) {
+            if (isLocked) return;
+
+            const node = e.target;
+            if (!selectedNode) {
+                selectedNode = node;
+                node.classList.add('selected');
+            } else {
+                const firstNode = selectedNode;
+                firstNode.classList.remove('selected');
+                selectedNode = null;
+
+                const isValidConnection = 
+                    firstNode !== node && 
+                    firstNode.className !== node.className && 
+                    firstNode.parentElement.parentElement.id !== node.parentElement.parentElement.id; 
+
+                if (isValidConnection) {
+                    const fromNode = firstNode.classList.contains('node-output') ? firstNode : node;
+                    const toNode = firstNode.classList.contains('node-input') ? firstNode : node;
+
+                    const exactMatchIdx = connections.findIndex(c => c.from === fromNode.id && c.to === toNode.id);
+                    
+                    if (exactMatchIdx > -1) {
+                        connections.splice(exactMatchIdx, 1);
+                    } else {
+                        connections = connections.filter(c => c.to !== toNode.id);
+                        connections.push({ from: fromNode.id, to: toNode.id });
+                    }
+                }
+                updateSignalTextLabels();
+                drawConnections();
+            }
+        }
+
+        function drawConnections() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const rectCanvas = canvas.getBoundingClientRect();
+
+            connections.forEach(conn => {
+                const elFrom = document.getElementById(conn.from);
+                const elTo = document.getElementById(conn.to);
+
+                if (!elFrom || !elTo) return; 
+
+                const boxFrom = elFrom.closest('.audio-box');
+                const boxTo = elTo.closest('.audio-box');
+
+                if (boxFrom.classList.contains('is-hidden') || boxTo.classList.contains('is-hidden')) return;
+
+                const rectFrom = elFrom.getBoundingClientRect();
+                const rectTo = elTo.getBoundingClientRect();
+
+                const columnFrom = elFrom.closest('.column');
+                const columnTo = elTo.closest('.column');
+
+                let x1 = (rectFrom.left + rectFrom.width / 2) - rectCanvas.left;
+                let y1 = (rectFrom.top + rectFrom.height / 2) - rectCanvas.top;
+                let x2 = (rectTo.left + rectTo.width / 2) - rectCanvas.left;
+                let y2 = (rectTo.top + rectTo.height / 2) - rectCanvas.top;
+
+                if (window.innerWidth <= 768) {
+                    const isFromVisible = columnFrom.classList.contains('mobile-active');
+                    const isToVisible = columnTo.classList.contains('mobile-active');
+
+                    if (!isFromVisible && !isToVisible) return;
+
+                    if (!isFromVisible) {
+                        x1 = columnTo.getBoundingClientRect().left - rectCanvas.left - 10;
+                        y1 = y2;
+                    }
+                    if (!isToVisible) {
+                        x2 = columnFrom.getBoundingClientRect().right - rectCanvas.left + 10;
+                        y2 = y1;
+                    }
+                }
+
+                const boxColor = boxFrom.style.borderLeftColor || '#00adb5';
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.bezierCurveTo(x1 + 50, y1, x2 - 50, y2, x2, y2);
+                ctx.strokeStyle = boxColor;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            });
+        }
+
+        function captureCurrentStateStructure() {
+            const state = { boxes: [], connections: [...connections] };
+            document.querySelectorAll('.audio-box').forEach(box => {
+                const columnName = box.closest('.column').getAttribute('data-column');
+                state.boxes.push({
+                    id: box.id,
+                    column: columnName,
+                    name: box.querySelector('.box-name').value,
+                    color: box.style.borderLeftColor
+                });
+            });
+            return state;
+        }
+
+        function renderStateStructure(state) {
+            document.getElementById('mixer-search').value = ''; 
+            document.getElementById('search-clear-btn').style.display = 'none';
+            document.querySelectorAll('.box-list').forEach(list => list.innerHTML = '');
+            connections = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            state.boxes.forEach(b => createBox(b.column, b.name, b.color, b.id, false));
+            connections = state.connections;
+            updateSignalTextLabels();
+            setTimeout(drawConnections, 50);
+        }
+
+        function saveWorkspace() {
+            const workspaceData = captureCurrentStateStructure();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(workspaceData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "audio_patch_monitor_workspace.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importWorkspaceFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsedData = JSON.parse(e.target.result);
+                    if (!parsedData.boxes || !parsedData.connections) throw new Error();
+
+                    const filename = file.name;
+                    importedWorkspaces[filename] = parsedData;
+
+                    const dropdown = document.getElementById('workspace-dropdown');
+                    let optionExists = Object.values(dropdown.options).some(opt => opt.value === filename);
+                    
+                    if (!optionExists) {
+                        const newOption = document.createElement('option');
+                        newOption.value = filename;
+                        newOption.textContent = filename;
+                        dropdown.appendChild(newOption);
+                    }
+
+                    dropdown.value = filename;
+                    renderStateStructure(parsedData);
+
+                } catch (err) {
+                    alert("Invalid setup configuration file structure.");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; 
+        }
+
+        function handleDropdownSelect(event) {
+            const selectedValue = event.target.value;
+            if (!selectedValue) return;
+
+            if (selectedValue === 'default') {
+                renderStateStructure(defaultStateBackup);
+            } else if (importedWorkspaces[selectedValue]) {
+                renderStateStructure(importedWorkspaces[selectedValue]);
+            }
+        }
+
+        // --- GLOBAL KEYBOARD SHORTCUTS LISTENER ---
+        window.addEventListener('keydown', function(event) {
+            if (!event.ctrlKey && !event.metaKey) return; 
+
+            const key = event.key.toLowerCase();
+            
+            if (key === 'm') {
+                event.preventDefault();
+                createBoxAction('Mixer');
+            } else if (key === 'l') {
+                event.preventDefault();
+                createBoxAction('Line');
+            } else if (key === 's') {
+                event.preventDefault(); 
+                createBoxAction('Snake');
+            }
+        });
+
+        // --- BULLETPROOF INITIALIZATION ENGINE ---
+        function initAppEngine() {
+            if (document.querySelectorAll('.audio-box').length > 0) return;
+
+            const mixerChannels = [
+                "Juls", "Joys", "Cat", "JD", "Niko", "Edlyn", "Gel", "Pau", "Aice", "MD", "KAndre", 
+                "RF1", "RF2", "RF3-O", "RF4-B", "RF5-O", "RF6-B", "Crowd", "Kick-Hi", "Kick-Lo", 
+                "Snare", "HiHat", "Overhead", "Tom1", "Tom2", "Tom3", "Tom4", "BGtr", "AGtr", 
+                "EGtr1", "EGtr2", "Lkeys", "SKeys"
+            ];
+            
+            mixerChannels.forEach(name => {
+                createBox('Mixer', name, '#e91e63', null, false);
+            });
+
+            for (let i = 1; i <= 32; i++) {
+                createBox('Line', `Line ${i}`, '#00adb5', null, false);
+            }
+
+            createBox('Snake', 'Stage Box A', '#9c27b0', null, false);
+
+            setTimeout(() => {
+                defaultStateBackup = captureCurrentStateStructure();
+                resizeCanvas();
+            }, 200);
+        }
+
+        initAppEngine();
+        window.addEventListener('DOMContentLoaded', initAppEngine);
+        window.addEventListener('load', initAppEngine);
+    </script>
+</body>
+</html>
